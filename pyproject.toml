@@ -1,0 +1,10 @@
+[project]
+name = "guess-my-number"
+version = "0.1.0"
+description = "Daily offline guess-my-number competition between isolated agents."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+

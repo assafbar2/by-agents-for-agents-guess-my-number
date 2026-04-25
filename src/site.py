@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from src.game import GameResult
+
+
+def update_results_json(site_dir: Path, result: GameResult) -> None:
+    site_dir.mkdir(parents=True, exist_ok=True)
+    runs_dir = site_dir / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    run_payload = result.to_dict()
+    (runs_dir / f"{result.run_id}.json").write_text(
+        json.dumps(run_payload, indent=2),
+        encoding="utf-8",
+    )
+
+    results_path = site_dir / "results.json"
+    existing: list[dict[str, Any]] = []
+    if results_path.exists():
+        existing = json.loads(results_path.read_text(encoding="utf-8"))
+
+    by_run_id = {item["run_id"]: item for item in existing}
+    by_run_id[result.run_id] = run_payload
+    ordered = sorted(by_run_id.values(), key=lambda item: item["played_at"], reverse=True)
+    results_path.write_text(json.dumps(ordered[:100], indent=2), encoding="utf-8")
+
+
+def write_dashboard(site_dir: Path) -> None:
+    site_dir.mkdir(parents=True, exist_ok=True)
+    (site_dir / "index.html").write_text(
+        """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guess My Number Daily Competition</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f4;
+      --fg: #202124;
+      --muted: #666b73;
+      --panel: #ffffff;
+      --line: #d9d9d2;
+      --accent: #15616d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151719;
+        --fg: #f0f2f3;
+        --muted: #a6adb5;
+        --panel: #202327;
+        --line: #343a40;
+        --accent: #5fb3c1;
+      }
+    }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    main {
+      width: min(1080px, calc(100% - 32px));
+      margin: 32px auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.2;
+    }
+    h1 {
+      font-size: clamp(2rem, 6vw, 4rem);
+      max-width: 760px;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric, .agent, .history {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .metric strong {
+      display: block;
+      font-size: 1.5rem;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+    .agents {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      padding: 8px 6px;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 650;
+    }
+    @media (max-width: 680px) {
+      header {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="muted">Daily benchmark</p>
+        <h1>Guess My Number</h1>
+      </div>
+      <p class="muted">Two isolated guesser agents compete against the same secret number.</p>
+    </header>
+    <section id="app">Loading results...</section>
+  </main>
+  <script>
+    const feedback = value => value.replaceAll("_", " ");
+
+    function attemptsTable(attempts) {
+      return `<table>
+        <thead><tr><th>Turn</th><th>Guess</th><th>Feedback</th></tr></thead>
+        <tbody>${attempts.map(a => `<tr><td>${a.turn}</td><td>${a.guess}</td><td>${feedback(a.feedback)}</td></tr>`).join("")}</tbody>
+      </table>`;
+    }
+
+    function render(results) {
+      if (!results.length) {
+        document.getElementById("app").textContent = "No runs yet.";
+        return;
+      }
+      const latest = results[0];
+      document.getElementById("app").innerHTML = `
+        <section class="summary">
+          <div class="metric"><span>Date</span><strong>${latest.run_id}</strong></div>
+          <div class="metric"><span>Secret Number</span><strong>${latest.secret_number}</strong></div>
+          <div class="metric"><span>Result</span><strong>${latest.summary}</strong></div>
+        </section>
+        <section class="agents">
+          ${latest.competitors.map(agent => `
+            <article class="agent">
+              <h2>${agent.display_name}</h2>
+              <p class="muted">${agent.personality}</p>
+              <p><strong>${agent.attempts.length}</strong> attempts · ${agent.solved ? "solved" : "not solved"}</p>
+              ${attemptsTable(agent.attempts)}
+            </article>
+          `).join("")}
+        </section>
+        <section class="history">
+          <h2>History</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Secret</th><th>Winner</th><th>Summary</th></tr></thead>
+            <tbody>${results.map(run => `
+              <tr>
+                <td>${run.run_id}</td>
+                <td>${run.secret_number}</td>
+                <td>${run.winner_agent_id || "tie"}</td>
+                <td>${run.summary}</td>
+              </tr>
+            `).join("")}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    fetch("results.json")
+      .then(response => response.ok ? response.json() : [])
+      .then(render)
+      .catch(error => {
+        document.getElementById("app").textContent = `Could not load results: ${error.message}`;
+      });
+  </script>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+

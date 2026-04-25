@@ -1,0 +1,100 @@
+name: Daily Guess My Number
+
+on:
+  schedule:
+    # GitHub cron is UTC. These two times cover 10 AM Pacific across DST.
+    - cron: "0 17 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      min_number:
+        description: "Lowest possible number"
+        required: true
+        default: "1"
+      max_number:
+        description: "Highest possible number"
+        required: true
+        default: "100"
+      skip_email:
+        description: "Skip AgentMail email"
+        required: true
+        type: boolean
+        default: false
+      skip_notion:
+        description: "Skip Notion append"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  run-game:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check schedule time
+        id: schedule_time
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$(TZ=America/Los_Angeles date +%H)" = "10" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        if: steps.schedule_time.outputs.should_run == 'true'
+        run: python -m unittest discover -s tests
+
+      - name: Run daily game
+        if: steps.schedule_time.outputs.should_run == 'true'
+        env:
+          AGENTMAIL_API_KEY: ${{ secrets.AGENTMAIL_API_KEY }}
+          AGENTMAIL_INBOX_ID: ${{ secrets.AGENTMAIL_INBOX_ID }}
+          REPORT_RECIPIENT_EMAIL: ${{ secrets.REPORT_RECIPIENT_EMAIL }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY || 'dummy-notion-api-key' }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID || 'dummy-notion-page-id' }}
+        run: >
+          python -m src.run_daily
+          --min-number "${{ github.event.inputs.min_number || '1' }}"
+          --max-number "${{ github.event.inputs.max_number || '100' }}"
+          ${{ github.event.inputs.skip_email == 'true' && '--skip-email' || '' }}
+          ${{ github.event.inputs.skip_notion == 'true' && '--skip-notion' || '' }}
+
+      - name: Commit generated run files
+        if: steps.schedule_time.outputs.should_run == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Add daily game result"
+          file_pattern: "data/runs/*.json data/runs/*.md site/results.json site/runs/*.json site/index.html"
+
+      - name: Configure Pages
+        if: steps.schedule_time.outputs.should_run == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: steps.schedule_time.outputs.should_run == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        if: steps.schedule_time.outputs.should_run == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
