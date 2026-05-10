@@ -1,0 +1,79 @@
+{
+  "run_id": "2026-05-10",
+  "played_at": "2026-05-10T10:53:01.262777-07:00",
+  "config": {
+    "minimum": 1,
+    "maximum": 100,
+    "max_attempts": null
+  },
+  "setter_personality": "random",
+  "secret_number": 75,
+  "competitors": [
+    {
+      "agent_id": "binary_search",
+      "display_name": "Binary Search",
+      "personality": "binary_search",
+      "attempts": [
+        {
+          "turn": 1,
+          "guess": 50,
+          "feedback": "too_low"
+        },
+        {
+          "turn": 2,
+          "guess": 75,
+          "feedback": "correct"
+        }
+      ]
+    },
+    {
+      "agent_id": "feedback_random",
+      "display_name": "Feedback-Constrained Random",
+      "personality": "random_but_follows_feedback",
+      "attempts": [
+        {
+          "turn": 1,
+          "guess": 91,
+          "feedback": "too_high"
+        },
+        {
+          "turn": 2,
+          "guess": 21,
+          "feedback": "too_low"
+        },
+        {
+          "turn": 3,
+          "guess": 90,
+          "feedback": "too_high"
+        },
+        {
+          "turn": 4,
+          "guess": 47,
+          "feedback": "too_low"
+        },
+        {
+          "turn": 5,
+          "guess": 77,
+          "feedback": "too_high"
+        },
+        {
+          "turn": 6,
+          "guess": 72,
+          "feedback": "too_low"
+        },
+        {
+          "turn": 7,
+          "guess": 74,
+          "feedback": "too_low"
+        },
+        {
+          "turn": 8,
+          "guess": 75,
+          "feedback": "correct"
+        }
+      ]
+    }
+  ],
+  "winner_agent_id": "binary_search",
+  "summary": "Binary Search won by 6 attempts."
+}
